@@ -1,0 +1,32 @@
+{
+  "name": "douyin-video-workflow",
+  "version": "1.0.0",
+  "description": "n8n workflow for Douyin video processing with OCR and AI translation",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts"
+  },
+  "dependencies": {
+    "googleapis": "^130.0.0",
+    "openai": "^4.0.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "srt-parser-2": "^1.2.3",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "fast-check": "^3.15.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "@types/node": "^20.0.0",
+    "@types/fluent-ffmpeg": "^2.1.24",
+    "@types/jest": "^29.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

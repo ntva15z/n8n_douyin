@@ -1,0 +1,165 @@
+# Implementation Plan
+
+- [x] 1. Thiết lập project structure và dependencies
+  - [x] 1.1 Tạo cấu trúc thư mục cho n8n custom nodes
+    - Tạo folders: `src/nodes`, `src/services`, `src/utils`, `src/types`
+    - Khởi tạo package.json với dependencies cần thiết
+    - _Requirements: 1.1_
+  - [x] 1.2 Cài đặt và cấu hình dependencies
+    - Install: `googleapis`, `axios`, `ffmpeg-static`, `srt-parser-2`
+    - Install dev: `typescript`, `fast-check`, `jest`, `@types/node`
+    - _Requirements: 1.1_
+
+- [x] 2. Implement SRT Manager (Core utility)
+  - [x] 2.1 Implement SRT parser và generator
+    - Tạo `src/utils/srt-manager.ts`
+    - Implement `parse()`: string → TextSegment[]
+    - Implement `generate()`: TextSegment[] → string
+    - _Requirements: 3.3_
+  - [ ]* 2.2 Write property test: SRT Round Trip
+    - **Property 7: SRT Generation Round Trip**
+    - **Validates: Requirements 3.3**
+  - [x] 2.3 Implement SRT validation
+    - Implement `validate()`: kiểm tra timestamps sequential và non-overlapping
+    - _Requirements: 3.5_
+  - [ ]* 2.4 Write property test: SRT Timestamp Validation
+    - **Property 8: SRT Timestamp Validation**
+    - **Validates: Requirements 3.5**
+  - [x] 2.5 Implement SRT split và merge
+    - Implement `split()`: chia SRT khi > 5000 chars
+    - Implement `merge()`: ghép các phần SRT lại
+    - _Requirements: 4.2, 4.3_
+  - [ ]* 2.6 Write property test: SRT Split Preservation
+    - **Property 9: SRT Split Preservation**
+    - **Validates: Requirements 4.2, 4.3**
+
+- [ ] 3. Checkpoint - Đảm bảo tất cả tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [-] 4. Implement Google Sheet Manager
+  - [x] 4.1 Implement Google Sheet connection và data retrieval
+    - Tạo `src/services/google-sheet-manager.ts`
+    - Implement `connect()` với retry logic (3 lần, 30s interval)
+    - Implement `getRows()` để lấy tất cả rows
+    - _Requirements: 1.1, 1.4_
+  - [x] 4.2 Implement row filtering và extraction
+    - Implement `filterByStatus()`: lọc rows theo status
+    - Implement extraction logic cho user_id và lastprocess
+    - Validate và skip rows thiếu required fields
+    - _Requirements: 1.2, 1.3, 1.5_
+  - [ ]* 4.3 Write property test: Status Filtering
+    - **Property 1: Status Filtering Correctness**
+    - **Validates: Requirements 1.2**
+  - [ ]* 4.4 Write property test: Field Extraction
+    - **Property 2: Field Extraction Completeness**
+    - **Validates: Requirements 1.3**
+  - [ ]* 4.5 Write property test: Invalid Row Filtering
+    - **Property 3: Invalid Row Filtering**
+    - **Validates: Requirements 1.5**
+  - [x] 4.6 Implement updateRow function
+    - Implement `updateRow()` để cập nhật lastprocess và processing_status
+    - _Requirements: 2.3, 5.6_
+
+- [-] 5. Implement Douyin Video Fetcher
+  - [x] 5.1 Implement video list retrieval
+    - Tạo `src/services/douyin-fetcher.ts`
+    - Implement `getVideosByDateRange()` với date filtering
+    - Handle rate limiting (pause 60s khi bị limit)
+    - _Requirements: 2.1, 2.5_
+  - [ ]* 5.2 Write property test: Date Range Filtering
+    - **Property 4: Date Range Video Filtering**
+    - **Validates: Requirements 2.1**
+  - [x] 5.3 Implement video download
+    - Implement `downloadVideo()` với retry logic (3 lần)
+    - Lưu video metadata (title, duration, publishDate)
+    - _Requirements: 2.2, 2.4, 2.6_
+  - [ ]* 5.4 Write property test: Metadata Completeness
+    - **Property 5: Video Metadata Completeness**
+    - **Validates: Requirements 2.6**
+
+- [ ] 6. Checkpoint - Đảm bảo tất cả tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [-] 7. Implement OCR Service Integration
+  - [x] 7.1 Implement OCR service wrapper
+    - Tạo `src/services/ocr-service.ts`
+    - Implement `extractText()` gọi OCR API
+    - Parse response thành TextSegment[] với timestamps
+    - _Requirements: 3.1, 3.2_
+  - [ ]* 7.2 Write property test: OCR Output Format
+    - **Property 6: OCR Output Format**
+    - **Validates: Requirements 3.2**
+  - [x] 7.3 Implement error handling cho OCR
+    - Mark video for manual review khi OCR fails
+    - _Requirements: 3.4_
+
+- [-] 8. Implement AI Translation Service
+  - [x] 8.1 Implement translation service wrapper
+    - Tạo `src/services/translation-service.ts`
+    - Implement `translate()` gọi AI API
+    - Implement `translateSRT()` với logic split/merge cho file lớn
+    - _Requirements: 4.1, 4.2, 4.3, 4.5_
+  - [ ]* 8.2 Write property test: Timestamp Preservation
+    - **Property 10: Timestamp Preservation After Translation**
+    - **Validates: Requirements 4.4**
+
+- [-] 9. Implement Video Processor
+  - [x] 9.1 Implement subtitle embedding
+    - Tạo `src/services/video-processor.ts`
+    - Implement `embedSubtitles()` sử dụng FFmpeg
+    - _Requirements: 5.1, 5.4_
+  - [x] 9.2 Implement audio analysis và timing adjustment
+    - Implement `analyzeAudioPace()` để phân tích tốc độ audio
+    - Implement `adjustSubtitleTiming()` để điều chỉnh timing phụ đề
+    - _Requirements: 5.2, 5.3_
+  - [ ]* 9.3 Write property test: Subtitle Synchronization
+    - **Property 11: Subtitle Synchronization**
+    - **Validates: Requirements 5.2**
+  - [x] 9.4 Implement sync failure reporting
+    - Generate report với timing discrepancies khi sync fails
+    - _Requirements: 5.5_
+
+- [ ] 10. Checkpoint - Đảm bảo tất cả tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [-] 11. Implement Logger và Reporter
+  - [x] 11.1 Implement logging service
+    - Tạo `src/services/logger.ts`
+    - Implement `info()`, `warn()`, `error()` với metadata
+    - Đảm bảo error logs có timestamp, step name, error message
+    - _Requirements: 6.1, 6.2_
+  - [ ]* 11.2 Write property test: Error Log Completeness
+    - **Property 12: Error Log Completeness**
+    - **Validates: Requirements 6.1**
+  - [x] 11.3 Implement report generation
+    - Implement `generateReport()` với success/failure counts
+    - _Requirements: 6.3_
+  - [ ]* 11.4 Write property test: Report Accuracy
+    - **Property 13: Report Accuracy**
+    - **Validates: Requirements 6.3**
+  - [x] 11.5 Implement alert notification
+    - Gửi notification khi có critical errors
+    - _Requirements: 6.4_
+
+- [-] 12. Tạo n8n Workflow
+  - [x] 12.1 Tạo n8n workflow JSON
+    - Tạo `workflow/douyin-video-workflow.json`
+    - Cấu hình trigger node (Schedule hoặc Manual)
+    - _Requirements: 1.1_
+  - [x] 12.2 Kết nối Google Sheet nodes
+    - Thêm Google Sheets node để đọc data
+    - Thêm Filter node cho status "Started"
+    - Thêm Google Sheets node để update lastprocess
+    - _Requirements: 1.1, 1.2, 2.3_
+  - [x] 12.3 Kết nối processing nodes
+    - Thêm HTTP Request nodes cho Douyin API
+    - Thêm Code nodes để gọi các services
+    - Thêm Loop nodes cho batch processing
+    - _Requirements: 2.1, 3.1, 4.1, 5.1_
+  - [x] 12.4 Cấu hình error handling trong workflow
+    - Thêm Error Trigger nodes
+    - Cấu hình retry logic trong workflow
+    - _Requirements: 1.4, 2.4, 4.5_
+
+- [ ] 13. Final Checkpoint - Đảm bảo tất cả tests pass
+  - Ensure all tests pass, ask the user if questions arise.

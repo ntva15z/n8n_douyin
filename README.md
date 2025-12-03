@@ -67,9 +67,27 @@ Google Drive URL: https://drive.google.com/drive/folders/{FOLDER_ID}
 
 ### 2. OpenAI API Key
 
-1. Vào [OpenAI Platform](https://platform.openai.com/api-keys)
+**Bước 1: Đăng ký tài khoản**
+1. Vào [platform.openai.com](https://platform.openai.com/)
+2. Click "Sign up" (hoặc "Log in" nếu đã có tài khoản)
+3. Đăng ký bằng email hoặc Google/Microsoft account
+
+**Bước 2: Thêm phương thức thanh toán**
+1. Vào Settings → Billing
+2. Click "Add payment method"
+3. Thêm thẻ Visa/Mastercard (cần thẻ quốc tế)
+4. Nạp credit (tối thiểu $5)
+
+**Bước 3: Tạo API Key**
+1. Vào [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 2. Click "Create new secret key"
-3. Copy key (bắt đầu bằng `sk-`)
+3. Đặt tên (ví dụ: "douyin-workflow")
+4. Copy key ngay (chỉ hiện 1 lần!) - bắt đầu bằng `sk-...`
+
+**Chi phí ước tính:**
+- GPT-4o-mini: ~$0.15/1M input tokens, ~$0.60/1M output tokens
+- Mỗi video ngắn (1-2 phút): ~$0.01-0.05
+- Nạp $5-10 là đủ dùng khá lâu
 
 ### 3. Baidu OCR
 
@@ -77,6 +95,46 @@ Google Drive URL: https://drive.google.com/drive/folders/{FOLDER_ID}
 2. Đăng ký tài khoản
 3. Vào Console → 文字识别 (OCR)
 4. Tạo ứng dụng → Lấy API Key và Secret Key
+
+### 4. YouTube Channel (Optional)
+
+**Bước 1: Tạo tài khoản Google**
+1. Vào [accounts.google.com](https://accounts.google.com/)
+2. Click "Create account" → "For myself"
+3. Điền thông tin và xác minh số điện thoại
+
+**Bước 2: Tạo kênh YouTube**
+1. Vào [youtube.com](https://www.youtube.com/)
+2. Đăng nhập bằng tài khoản Google
+3. Click avatar → "Create a channel"
+4. Chọn "Use custom name" → đặt tên kênh
+5. Upload avatar và banner cho kênh
+
+**Bước 3: Cấu hình kênh**
+1. Vào YouTube Studio → Settings
+2. Channel → Basic info: Điền mô tả kênh
+3. Upload defaults: Đặt visibility mặc định, category, tags
+
+**Bước 4: Bật kiếm tiền (YouTube Partner Program)**
+
+Yêu cầu tối thiểu:
+- 1,000 subscribers
+- 4,000 giờ xem trong 12 tháng gần nhất HOẶC 10 triệu lượt xem Shorts trong 90 ngày
+- Tuân thủ chính sách của YouTube
+- Bật xác minh 2 bước
+- Có tài khoản AdSense
+
+Các bước:
+1. Vào YouTube Studio → Earn
+2. Click "Start" khi đủ điều kiện
+3. Đọc và chấp nhận điều khoản
+4. Kết nối hoặc tạo tài khoản AdSense
+5. Đợi YouTube review (thường 1-2 tuần)
+
+**Lưu ý:**
+- Kênh mới cần thời gian để đạt yêu cầu monetization
+- Nội dung phải tuân thủ YouTube Community Guidelines
+- Video có bản quyền có thể bị claim hoặc không được monetize
 
 ---
 

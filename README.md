@@ -89,12 +89,15 @@ Google Drive URL: https://drive.google.com/drive/folders/{FOLDER_ID}
 - Mỗi video ngắn (1-2 phút): ~$0.01-0.05
 - Nạp $5-10 là đủ dùng khá lâu
 
-### 3. Baidu OCR
+### 3. PaddleOCR (Free - Không cần đăng ký)
 
-1. Vào [Baidu Cloud](https://cloud.baidu.com/)
-2. Đăng ký tài khoản
-3. Vào Console → 文字识别 (OCR)
-4. Tạo ứng dụng → Lấy API Key và Secret Key
+PaddleOCR chạy local trong Docker container, hoàn toàn miễn phí.
+
+- Không cần API key
+- Hỗ trợ tiếng Trung (và 80+ ngôn ngữ khác)
+- Đã được cài sẵn trong Docker image
+
+**Lưu ý:** Lần chạy đầu tiên sẽ tải model (~100MB), sau đó sẽ cache lại.
 
 ### 4. YouTube Channel (Optional)
 

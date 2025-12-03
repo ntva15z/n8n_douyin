@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -8,30 +7,17 @@ import { OCRResult, TextSegment } from '../types';
 const execAsync = promisify(exec);
 
 const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 5000;
-
-export interface BaiduOCRConfig {
-  apiKey: string;
-  secretKey: string;
-  endpoint?: string;
-}
+const RETRY_DELAY_MS = 2000;
 
 export class OCRService {
-  private config: BaiduOCRConfig;
-  private accessToken: string | null = null;
-  private tokenExpiry: number = 0;
   private frameInterval: number; // seconds between frame extractions
 
-  constructor(config: BaiduOCRConfig, frameInterval: number = 1) {
-    this.config = {
-      ...config,
-      endpoint: config.endpoint || 'https://aip.baidubce.com/rest/2.0/ocr/v1/general'
-    };
+  constructor(frameInterval: number = 1) {
     this.frameInterval = frameInterval;
   }
 
   /**
-   * Extract text from video using OCR
+   * Extract text from video using PaddleOCR (free, local)
    */
   async extractText(videoPath: string): Promise<OCRResult> {
     const tempDir = path.join(path.dirname(videoPath), 'frames');
@@ -111,34 +97,36 @@ export class OCRService {
   }
 
   /**
-   * Process a single frame with Baidu OCR
+   * Process a single frame with PaddleOCR
    */
   private async processFrame(framePath: string): Promise<string> {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const token = await this.getAccessToken();
-        const imageBase64 = fs.readFileSync(framePath).toString('base64');
+        // Call PaddleOCR via Python script
+        const { stdout } = await execAsync(
+          `python3 -c "
+from paddleocr import PaddleOCR
+import json
+import sys
 
-        const response = await axios.post(
-          `${this.config.endpoint}?access_token=${token}`,
-          `image=${encodeURIComponent(imageBase64)}`,
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            }
-          }
+ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
+result = ocr.ocr('${framePath}', cls=True)
+
+texts = []
+if result and result[0]:
+    for line in result[0]:
+        if line and len(line) > 1:
+            texts.append(line[1][0])
+
+print(json.dumps(texts))
+"`,
+          { timeout: 30000 }
         );
 
-        if (response.data.words_result) {
-          // Combine all detected text
-          return response.data.words_result
-            .map((item: { words: string }) => item.words)
-            .join(' ');
-        }
-
-        return '';
+        const texts = JSON.parse(stdout.trim());
+        return texts.join(' ');
       } catch (error) {
         lastError = error as Error;
         
@@ -148,36 +136,8 @@ export class OCRService {
       }
     }
 
-    console.error(`OCR failed for frame ${framePath}:`, lastError);
+    console.error(`OCR failed for frame ${framePath}:`, lastError?.message);
     return '';
-  }
-
-  /**
-   * Get Baidu API access token
-   */
-  private async getAccessToken(): Promise<string> {
-    // Return cached token if still valid
-    if (this.accessToken && Date.now() < this.tokenExpiry) {
-      return this.accessToken;
-    }
-
-    const response = await axios.post(
-      'https://aip.baidubce.com/oauth/2.0/token',
-      null,
-      {
-        params: {
-          grant_type: 'client_credentials',
-          client_id: this.config.apiKey,
-          client_secret: this.config.secretKey
-        }
-      }
-    );
-
-    this.accessToken = response.data.access_token;
-    // Token expires in 30 days, refresh 1 day early
-    this.tokenExpiry = Date.now() + (29 * 24 * 60 * 60 * 1000);
-
-    return this.accessToken!;
   }
 
   /**

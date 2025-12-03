@@ -101,9 +101,6 @@ export interface EnvConfig {
   GOOGLE_SHEET_ID: string;
   GOOGLE_DRIVE_FOLDER_ID: string;
   GOOGLE_CREDENTIALS: string;
-  OCR_API_KEY: string;
-  OCR_SECRET_KEY: string;
-  OCR_ENDPOINT: string;
   OPENAI_API_KEY: string;
   ALERT_WEBHOOK_URL?: string;
   TEMP_VIDEO_PATH: string;

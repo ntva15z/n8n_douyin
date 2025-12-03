@@ -4,7 +4,6 @@ const REQUIRED_ENV_VARS = [
   'GOOGLE_SHEET_ID',
   'GOOGLE_DRIVE_FOLDER_ID',
   'GOOGLE_CREDENTIALS',
-  'OCR_API_KEY',
   'OPENAI_API_KEY'
 ] as const;
 
@@ -27,9 +26,6 @@ export function validateEnv(): EnvConfig {
     GOOGLE_SHEET_ID: process.env.GOOGLE_SHEET_ID!,
     GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID!,
     GOOGLE_CREDENTIALS: process.env.GOOGLE_CREDENTIALS!,
-    OCR_API_KEY: process.env.OCR_API_KEY!,
-    OCR_SECRET_KEY: process.env.OCR_SECRET_KEY || '',
-    OCR_ENDPOINT: process.env.OCR_ENDPOINT || 'https://aip.baidubce.com/rest/2.0/ocr/v1/general',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY!,
     ALERT_WEBHOOK_URL: process.env.ALERT_WEBHOOK_URL,
     TEMP_VIDEO_PATH: process.env.TEMP_VIDEO_PATH || './temp/videos',

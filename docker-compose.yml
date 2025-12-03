@@ -23,8 +23,6 @@ services:
       - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
       - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OCR_API_KEY=${OCR_API_KEY}
-      - OCR_SECRET_KEY=${OCR_SECRET_KEY}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflow:/home/node/workflows:ro
@@ -44,9 +42,6 @@ services:
       - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
       - GOOGLE_CREDENTIALS=/app/credentials/credentials.json
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OCR_API_KEY=${OCR_API_KEY}
-      - OCR_SECRET_KEY=${OCR_SECRET_KEY}
-      - OCR_ENDPOINT=${OCR_ENDPOINT:-https://aip.baidubce.com/rest/2.0/ocr/v1/general}
       - TEMP_VIDEO_PATH=/app/temp
       - OUTPUT_VIDEO_PATH=/app/output
     volumes:

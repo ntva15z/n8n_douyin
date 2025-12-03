@@ -12,7 +12,7 @@ export * from './utils/srt-manager';
 export { GoogleSheetManager } from './services/google-sheet-manager';
 export { GoogleDriveManager } from './services/google-drive-manager';
 export { DouyinFetcher } from './services/douyin-fetcher';
-export { OCRService, BaiduOCRConfig } from './services/ocr-service';
+export { OCRService } from './services/ocr-service';
 export { TranslationService } from './services/translation-service';
 export { VideoProcessor, SyncReport } from './services/video-processor';
 export { Logger, LogEntry, logger } from './services/logger';

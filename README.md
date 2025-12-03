@@ -5,6 +5,7 @@ Tự động tải video Douyin, trích xuất phụ đề bằng OCR, dịch sa
 ## Mục lục
 
 - [Quick Start](#quick-start)
+- [Hướng dẫn lấy Douyin User ID](#hướng-dẫn-lấy-douyin-user-id)
 - [Hướng dẫn tạo API Keys](#hướng-dẫn-tạo-api-keys)
 - [Cấu hình n8n](#cấu-hình-n8n)
 - [Google Sheet Format](#google-sheet-format)
@@ -32,6 +33,42 @@ docker-compose up -d --build
 
 - URL: http://localhost:5678
 - Lần đầu: Tạo owner account (email + password bất kỳ)
+
+---
+
+## Hướng dẫn lấy Douyin User ID
+
+### Cách 1: Từ URL profile (Web)
+
+1. Vào [douyin.com](https://www.douyin.com/)
+2. Tìm kiếm kênh/người dùng muốn theo dõi
+3. Vào trang profile của họ
+4. Copy User ID từ URL:
+   ```
+   https://www.douyin.com/user/MS4wLjABAAAAxxxxxxxxxx
+                               ^^^^^^^^^^^^^^^^^^^^^^
+                               Đây là user_id
+   ```
+
+### Cách 2: Từ app Douyin (Mobile)
+
+1. Mở app Douyin
+2. Vào profile người dùng muốn theo dõi
+3. Click "..." → "Share" → "Copy link"
+4. Link sẽ có dạng: `https://v.douyin.com/xxxxx/`
+5. Mở link trên browser → sẽ redirect tới URL có user_id
+
+### Cách 3: Từ video
+
+1. Mở một video của kênh muốn theo dõi
+2. Click vào avatar/tên người đăng
+3. Sẽ chuyển tới trang profile → lấy user_id từ URL
+
+### Lưu ý quan trọng
+
+- User ID thường bắt đầu bằng `MS4wLjABAAAA`
+- Mỗi kênh có một user_id duy nhất
+- Workflow sẽ tự động tải video mới từ các kênh trong Google Sheet
 
 ---
 

@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: douyin-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - GENERIC_TIMEZONE=Asia/Ho_Chi_Minh
+      - TZ=Asia/Ho_Chi_Minh
+      # Suppress deprecation warnings
+      - DB_SQLITE_POOL_SIZE=2
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - N8N_GIT_NODE_DISABLE_BARE_REPOS=true
+      # Workflow environment variables
+      - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
+      - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OCR_API_KEY=${OCR_API_KEY}
+      - OCR_SECRET_KEY=${OCR_SECRET_KEY}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflow:/home/node/workflows:ro
+      - shared_temp:/home/node/temp
+      - shared_output:/home/node/output
+    depends_on:
+      - worker
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: douyin-worker
+    restart: unless-stopped
+    environment:
+      - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
+      - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
+      - GOOGLE_CREDENTIALS=/app/credentials/credentials.json
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OCR_API_KEY=${OCR_API_KEY}
+      - OCR_SECRET_KEY=${OCR_SECRET_KEY}
+      - OCR_ENDPOINT=${OCR_ENDPOINT:-https://aip.baidubce.com/rest/2.0/ocr/v1/general}
+      - TEMP_VIDEO_PATH=/app/temp
+      - OUTPUT_VIDEO_PATH=/app/output
+    volumes:
+      - shared_temp:/app/temp
+      - shared_output:/app/output
+      - ./credentials:/app/credentials:ro
+
+volumes:
+  n8n_data:
+  shared_temp:
+  shared_output:

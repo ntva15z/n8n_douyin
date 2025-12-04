@@ -18,7 +18,8 @@ services:
       - DB_SQLITE_POOL_SIZE=2
       - N8N_RUNNERS_ENABLED=true
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
-      - N8N_GIT_NODE_DISABLE_BARE_REPOS=true
+      - NODE_FUNCTION_ALLOW_BUILTIN=*
+      - NODE_FUNCTION_ALLOW_EXTERNAL=*
       # Workflow environment variables
       - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
       - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
@@ -37,7 +38,10 @@ services:
       dockerfile: Dockerfile.worker
     container_name: douyin-worker
     restart: unless-stopped
+    expose:
+      - "3000"
     environment:
+      - PORT=3000
       - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
       - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
       - GOOGLE_CREDENTIALS=/app/credentials/credentials.json
@@ -48,6 +52,7 @@ services:
       - shared_temp:/app/temp
       - shared_output:/app/output
       - ./credentials:/app/credentials:ro
+
 
 volumes:
   n8n_data:

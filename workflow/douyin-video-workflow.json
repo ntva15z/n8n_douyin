@@ -3,424 +3,176 @@
   "nodes": [
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "hours",
-              "hoursInterval": 6
-            }
-          ]
-        }
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 6 }] }
       },
       "id": "trigger",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [0, 0]
     },
     {
       "parameters": {
-        "operation": "read",
-        "sheetId": "={{ $env.GOOGLE_SHEET_ID }}",
-        "range": "Sheet1!A:F"
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.GOOGLE_SHEET_ID }}" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Sheet1" },
+        "options": {}
       },
       "id": "read-sheet",
       "name": "Read Google Sheet",
       "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.2,
+      "typeVersion": 4.5,
       "position": [220, 0],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "google-sheets-cred",
-          "name": "Google Sheets"
-        }
-      }
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "" } }
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{ $json.status }}",
-              "operation": "equals",
-              "value2": "Started"
-            }
-          ]
-        }
+        "jsCode": "const items = $input.all();\nreturn items.map((item, index) => ({ json: { ...item.json, row_number: index + 2 } }));"
       },
-      "id": "filter-started",
-      "name": "Filter Started Channels",
-      "type": "n8n-nodes-base.filter",
-      "typeVersion": 1,
+      "id": "add-row-numbers",
+      "name": "Add Row Numbers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [440, 0]
     },
     {
       "parameters": {
         "conditions": {
-          "string": [
-            {
-              "value1": "={{ $json.user_id }}",
-              "operation": "isNotEmpty"
-            },
-            {
-              "value1": "={{ $json.lastprocess }}",
-              "operation": "isNotEmpty"
-            }
-          ]
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            { "id": "c1", "leftValue": "={{ $json.status }}", "rightValue": "Started", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
         },
-        "combineConditions": "and"
+        "options": {}
       },
-      "id": "validate-rows",
-      "name": "Validate Required Fields",
+      "id": "filter-started",
+      "name": "Filter Started",
       "type": "n8n-nodes-base.filter",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [660, 0]
     },
     {
       "parameters": {
-        "batchSize": 1,
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            { "id": "c1", "leftValue": "={{ $json.video_url }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
+          ],
+          "combinator": "and"
+        },
         "options": {}
       },
-      "id": "loop-channels",
-      "name": "Loop Channels",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
+      "id": "validate-url",
+      "name": "Has Video URL?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
       "position": [880, 0]
     },
     {
       "parameters": {
-        "operation": "update",
-        "sheetId": "={{ $env.GOOGLE_SHEET_ID }}",
-        "range": "Sheet1!E{{ $json.row_number }}",
-        "valueInputMode": "RAW",
-        "values": "Processing"
+        "jsCode": "const item = $input.first();\nreturn [{ json: { video_url: item.json.video_url, row_number: item.json.row_number } }];"
       },
-      "id": "update-status-processing",
-      "name": "Update Status: Processing",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.2,
-      "position": [1100, 0],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "google-sheets-cred",
-          "name": "Google Sheets"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Download videos using yt-dlp\nconst { exec } = require('child_process');\nconst util = require('util');\nconst execAsync = util.promisify(exec);\n\nconst userId = $input.first().json.user_id;\nconst lastprocess = $input.first().json.lastprocess;\nconst userUrl = `https://www.douyin.com/user/${userId}`;\n\ntry {\n  // Get video list\n  const { stdout } = await execAsync(\n    `yt-dlp --flat-playlist --dump-json \"${userUrl}\"`,\n    { maxBuffer: 50 * 1024 * 1024 }\n  );\n  \n  const videos = stdout.trim().split('\\n')\n    .filter(line => line.trim())\n    .map(line => JSON.parse(line))\n    .filter(video => {\n      const publishDate = new Date(video.timestamp * 1000);\n      return publishDate >= new Date(lastprocess);\n    });\n  \n  return videos.map(v => ({\n    json: {\n      id: v.id,\n      title: v.title || v.description,\n      url: v.url || v.webpage_url,\n      duration: v.duration,\n      publishDate: new Date(v.timestamp * 1000).toISOString(),\n      user_id: userId,\n      row_number: $input.first().json.row_number\n    }\n  }));\n} catch (error) {\n  throw new Error(`Failed to fetch videos: ${error.message}`);\n}"
-      },
-      "id": "fetch-videos",
-      "name": "Fetch Douyin Videos",
+      "id": "save-input",
+      "name": "Save Input Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1320, 0]
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "sheetId": "={{ $env.GOOGLE_SHEET_ID }}",
-        "range": "Sheet1!E{{ $json.row_number }}",
-        "valueInputMode": "RAW",
-        "values": "Downloading"
-      },
-      "id": "update-status-downloading",
-      "name": "Update Status: Downloading",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.2,
-      "position": [1540, 0],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "google-sheets-cred",
-          "name": "Google Sheets"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Download video file\nconst { exec } = require('child_process');\nconst util = require('util');\nconst path = require('path');\nconst execAsync = util.promisify(exec);\n\nconst video = $input.first().json;\nconst outputPath = `/tmp/videos/${video.id}.mp4`;\n\ntry {\n  await execAsync(\n    `yt-dlp -o \"${outputPath}\" \"${video.url}\"`,\n    { maxBuffer: 100 * 1024 * 1024 }\n  );\n  \n  return [{\n    json: {\n      ...video,\n      localPath: outputPath\n    }\n  }];\n} catch (error) {\n  throw new Error(`Failed to download video: ${error.message}`);\n}"
-      },
-      "id": "download-video",
-      "name": "Download Video",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1760, 0]
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "sheetId": "={{ $env.GOOGLE_SHEET_ID }}",
-        "range": "Sheet1!E{{ $json.row_number }}",
-        "valueInputMode": "RAW",
-        "values": "OCR_Processing"
-      },
-      "id": "update-status-ocr",
-      "name": "Update Status: OCR",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.2,
-      "position": [1980, 0],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "google-sheets-cred",
-          "name": "Google Sheets"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// OCR Processing - Extract text from video frames\n// This is a placeholder - integrate with your OCR service\nconst video = $input.first().json;\n\n// Simulate OCR result\nconst srtContent = `1\n00:00:01,000 --> 00:00:05,000\n示例字幕文本\n\n2\n00:00:05,500 --> 00:00:10,000\n更多字幕内容`;\n\nreturn [{\n  json: {\n    ...video,\n    chineseSrt: srtContent\n  }\n}];"
-      },
-      "id": "ocr-process",
-      "name": "OCR Process",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [2200, 0]
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "sheetId": "={{ $env.GOOGLE_SHEET_ID }}",
-        "range": "Sheet1!E{{ $json.row_number }}",
-        "valueInputMode": "RAW",
-        "values": "Translating"
-      },
-      "id": "update-status-translating",
-      "name": "Update Status: Translating",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.2,
-      "position": [2420, 0],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "google-sheets-cred",
-          "name": "Google Sheets"
-        }
-      }
+      "position": [1100, 0]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "http://worker:3000/process-video",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "model",
-              "value": "gpt-4o-mini"
-            },
-            {
-              "name": "messages",
-              "value": "=[{\"role\": \"user\", \"content\": \"Translate the following Chinese subtitle text to Vietnamese. Keep the same line structure and timing markers. Only output the translated text.\\n\\n{{ $json.chineseSrt }}\"}]"
-            },
-            {
-              "name": "temperature",
-              "value": "0.3"
-            }
-          ]
+        "specifyBody": "json",
+        "jsonBody": "={ \"video_url\": \"{{ $json.video_url }}\", \"row_number\": {{ $json.row_number }} }",
+        "options": { "timeout": 900000 }
+      },
+      "id": "process-video",
+      "name": "Process Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            { "id": "c1", "leftValue": "={{ $json.success }}", "rightValue": "={{ true }}", "operator": { "type": "boolean", "operation": "equals" } }
+          ],
+          "combinator": "and"
         },
         "options": {}
       },
-      "id": "translate",
-      "name": "Translate with OpenAI",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [2640, 0],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "openai-header-auth",
-          "name": "OpenAI Header Auth"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "sheetId": "={{ $env.GOOGLE_SHEET_ID }}",
-        "range": "Sheet1!E{{ $json.row_number }}",
-        "valueInputMode": "RAW",
-        "values": "Embedding"
-      },
-      "id": "update-status-embedding",
-      "name": "Update Status: Embedding",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.2,
-      "position": [2860, 0],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "google-sheets-cred",
-          "name": "Google Sheets"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Embed subtitles using FFmpeg\nconst { exec } = require('child_process');\nconst util = require('util');\nconst fs = require('fs');\nconst execAsync = util.promisify(exec);\n\nconst video = $input.first().json;\nconst srtPath = `/tmp/videos/${video.id}.srt`;\nconst outputPath = `/tmp/videos/${video.id}_subtitled.mp4`;\n\n// Write SRT file\nfs.writeFileSync(srtPath, video.vietnameseSrt || video.message?.content);\n\ntry {\n  await execAsync(\n    `ffmpeg -i \"${video.localPath}\" -vf \"subtitles='${srtPath}'\" -c:a copy \"${outputPath}\" -y`,\n    { maxBuffer: 100 * 1024 * 1024 }\n  );\n  \n  return [{\n    json: {\n      ...video,\n      outputPath: outputPath\n    }\n  }];\n} catch (error) {\n  throw new Error(`Failed to embed subtitles: ${error.message}`);\n}"
-      },
-      "id": "embed-subtitles",
-      "name": "Embed Subtitles",
-      "type": "n8n-nodes-base.code",
+      "id": "check-success",
+      "name": "Success?",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [3080, 0]
+      "position": [1540, 0]
     },
     {
       "parameters": {
-        "operation": "upload",
-        "folderId": "={{ $env.GOOGLE_DRIVE_FOLDER_ID }}",
-        "name": "={{ $json.id }}_subtitled.mp4",
-        "binaryPropertyName": "data"
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.GOOGLE_SHEET_ID }}" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Sheet1" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "video_url": "={{ $('Save Input Data').item.json.video_url }}",
+            "status": "Stopped",
+            "output_location": "={{ $('Process Video').item.json.drive_link }}",
+            "processing_status": "Completed"
+          }
+        },
+        "matchingColumns": ["video_url"],
+        "options": {}
       },
-      "id": "upload-drive",
-      "name": "Upload to Google Drive",
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [3300, 0],
-      "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "google-drive-cred",
-          "name": "Google Drive"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "sheetId": "={{ $env.GOOGLE_SHEET_ID }}",
-        "range": "Sheet1!D{{ $json.row_number }}:E{{ $json.row_number }}",
-        "valueInputMode": "RAW",
-        "values": "={{ $json.webViewLink }},Completed"
-      },
-      "id": "update-status-completed",
-      "name": "Update Status: Completed",
+      "id": "update-success",
+      "name": "Update Sheet Success",
       "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.2,
-      "position": [3520, 0],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "google-sheets-cred",
-          "name": "Google Sheets"
-        }
-      }
+      "typeVersion": 4.5,
+      "position": [1760, -100],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "" } }
     },
     {
       "parameters": {
-        "operation": "update",
-        "sheetId": "={{ $env.GOOGLE_SHEET_ID }}",
-        "range": "Sheet1!B{{ $json.row_number }}",
-        "valueInputMode": "RAW",
-        "values": "={{ new Date().toISOString().split('T')[0] }}"
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.GOOGLE_SHEET_ID }}" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Sheet1" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "video_url": "={{ $('Save Input Data').item.json.video_url }}",
+            "status": "Started",
+            "output_location": "={{ $('Process Video').item.json.error }}",
+            "processing_status": "Failed"
+          }
+        },
+        "matchingColumns": ["video_url"],
+        "options": {}
       },
-      "id": "update-lastprocess",
-      "name": "Update lastprocess",
+      "id": "update-failed",
+      "name": "Update Sheet Failed",
       "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.2,
-      "position": [3740, 0],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "google-sheets-cred",
-          "name": "Google Sheets"
-        }
-      }
+      "typeVersion": 4.5,
+      "position": [1760, 100],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "" } }
     }
   ],
   "connections": {
-    "Schedule Trigger": {
+    "Schedule Trigger": { "main": [[{ "node": "Read Google Sheet", "type": "main", "index": 0 }]] },
+    "Read Google Sheet": { "main": [[{ "node": "Add Row Numbers", "type": "main", "index": 0 }]] },
+    "Add Row Numbers": { "main": [[{ "node": "Filter Started", "type": "main", "index": 0 }]] },
+    "Filter Started": { "main": [[{ "node": "Has Video URL?", "type": "main", "index": 0 }]] },
+    "Has Video URL?": { "main": [[{ "node": "Save Input Data", "type": "main", "index": 0 }]] },
+    "Save Input Data": { "main": [[{ "node": "Process Video", "type": "main", "index": 0 }]] },
+    "Process Video": { "main": [[{ "node": "Success?", "type": "main", "index": 0 }]] },
+    "Success?": { 
       "main": [
-        [{ "node": "Read Google Sheet", "type": "main", "index": 0 }]
-      ]
-    },
-    "Read Google Sheet": {
-      "main": [
-        [{ "node": "Filter Started Channels", "type": "main", "index": 0 }]
-      ]
-    },
-    "Filter Started Channels": {
-      "main": [
-        [{ "node": "Validate Required Fields", "type": "main", "index": 0 }]
-      ]
-    },
-    "Validate Required Fields": {
-      "main": [
-        [{ "node": "Loop Channels", "type": "main", "index": 0 }]
-      ]
-    },
-    "Loop Channels": {
-      "main": [
-        [{ "node": "Update Status: Processing", "type": "main", "index": 0 }]
-      ]
-    },
-    "Update Status: Processing": {
-      "main": [
-        [{ "node": "Fetch Douyin Videos", "type": "main", "index": 0 }]
-      ]
-    },
-    "Fetch Douyin Videos": {
-      "main": [
-        [{ "node": "Update Status: Downloading", "type": "main", "index": 0 }]
-      ]
-    },
-    "Update Status: Downloading": {
-      "main": [
-        [{ "node": "Download Video", "type": "main", "index": 0 }]
-      ]
-    },
-    "Download Video": {
-      "main": [
-        [{ "node": "Update Status: OCR", "type": "main", "index": 0 }]
-      ]
-    },
-    "Update Status: OCR": {
-      "main": [
-        [{ "node": "OCR Process", "type": "main", "index": 0 }]
-      ]
-    },
-    "OCR Process": {
-      "main": [
-        [{ "node": "Update Status: Translating", "type": "main", "index": 0 }]
-      ]
-    },
-    "Update Status: Translating": {
-      "main": [
-        [{ "node": "Translate with OpenAI", "type": "main", "index": 0 }]
-      ]
-    },
-    "Translate with OpenAI": {
-      "main": [
-        [{ "node": "Update Status: Embedding", "type": "main", "index": 0 }]
-      ]
-    },
-    "Update Status: Embedding": {
-      "main": [
-        [{ "node": "Embed Subtitles", "type": "main", "index": 0 }]
-      ]
-    },
-    "Embed Subtitles": {
-      "main": [
-        [{ "node": "Upload to Google Drive", "type": "main", "index": 0 }]
-      ]
-    },
-    "Upload to Google Drive": {
-      "main": [
-        [{ "node": "Update Status: Completed", "type": "main", "index": 0 }]
-      ]
-    },
-    "Update Status: Completed": {
-      "main": [
-        [{ "node": "Update lastprocess", "type": "main", "index": 0 }]
-      ]
+        [{ "node": "Update Sheet Success", "type": "main", "index": 0 }],
+        [{ "node": "Update Sheet Failed", "type": "main", "index": 0 }]
+      ] 
     }
   },
-  "settings": {
-    "executionOrder": "v1"
-  }
+  "settings": { "executionOrder": "v1" }
 }

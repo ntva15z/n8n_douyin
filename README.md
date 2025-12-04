@@ -220,21 +220,78 @@ Lần đầu truy cập http://localhost:5678:
 
 ## Google Sheet Format
 
-Tạo Google Sheet với các cột sau:
+Tạo Google Sheet với các cột sau (đúng thứ tự):
 
-| Cột | Tên | Mô tả | Ví dụ |
-|-----|-----|-------|-------|
-| A | user_id | Douyin user ID | MS4wLjABAAAA... |
-| B | lastprocess | Ngày xử lý cuối | 2024-01-01 |
-| C | status | Trạng thái | Started |
-| D | output_location | URL video output | (tự động điền) |
-| E | processing_status | Trạng thái xử lý | (tự động điền) |
+| Cột | Tên | Required | Mô tả | Ví dụ |
+|-----|-----|----------|-------|-------|
+| A | video_url | ✅ BẮT BUỘC | URL video Douyin | https://www.douyin.com/video/xxx |
+| B | status | ✅ BẮT BUỘC | Trạng thái | Started |
+| C | output_location | ❌ Tự động | Path video output | (hệ thống tự điền) |
+| D | processing_status | ❌ Tự động | Trạng thái xử lý | (hệ thống tự điền) |
+
+### Giá trị cột status
+- `Started` - Video sẽ được xử lý
+- `Stopped` - Đã xử lý xong hoặc tạm dừng
+
+### Giá trị processing_status (tự động cập nhật)
+- `Processing` - Đang xử lý
+- `Completed` - Hoàn thành
+- `Failed` - Lỗi (xem output_location để biết chi tiết)
+
+### Cách lấy video URL
+
+1. Mở video trên Douyin (web hoặc app)
+2. Copy URL từ thanh địa chỉ hoặc nút Share
+3. URL có dạng: `https://www.douyin.com/video/7123456789012345678`
+
+### Ví dụ setup
+
+```
+Row 1 (Header): video_url | status | output_location | processing_status
+Row 2:          https://www.douyin.com/video/xxx | Started | |
+Row 3:          https://www.douyin.com/video/yyy | Started | |
+```
+
+### Workflow hoạt động như sau:
+1. Đọc tất cả rows có `status = Started`
+2. Cập nhật `processing_status = Processing`
+3. Download video từ Douyin (SaveTik API)
+4. OCR trích xuất phụ đề tiếng Trung (PaddleOCR - free)
+5. Dịch sang tiếng Việt (OpenAI GPT-4o-mini)
+6. **Tạo giọng đọc tiếng Việt (Edge TTS - free)**
+7. **Ghép video (tắt tiếng gốc) + giọng Việt + phụ đề**
+8. Upload lên Google Drive
+9. Cập nhật `processing_status = Completed` và link Drive
+
+### Chi phí ước tính
+- PaddleOCR: **Free** (chạy local)
+- Edge TTS: **Free** (Microsoft)
+- OpenAI GPT-4o-mini: ~$0.50/100 video
+- **Tổng: ~$0.50/tháng cho 100 video**
+6. Ghép phụ đề vào video
+7. Cập nhật `processing_status = Completed` và `status = Stopped`
+8. Nếu lỗi: `processing_status = Failed`
+| E | processing_status | ❌ Tự động | Trạng thái xử lý | (hệ thống tự điền) |
+
+### Cột bắt buộc phải điền
+
+1. **user_id (Cột A)** - Douyin user ID của kênh muốn theo dõi
+2. **lastprocess (Cột B)** - Ngày bắt đầu lấy video (workflow chỉ lấy video sau ngày này)
+3. **status (Cột C)** - Đặt `Started` để kích hoạt
+
+### Ví dụ setup ban đầu
+
+```
+Row 1 (Header): user_id | lastprocess | status | output_location | processing_status
+Row 2:          MS4wLjABAAAAxyz | 2024-12-01 | Started | |
+Row 3:          MS4wLjABAAAAabc | 2024-12-01 | Started | |
+```
 
 **Giá trị cột status:**
 - `Started` - Kênh đang hoạt động, sẽ được xử lý
 - `Stopped` - Tạm dừng, không xử lý
 
-**Giá trị processing_status:**
+**Giá trị processing_status (tự động):**
 - `Pending` - Chờ xử lý
 - `Downloading` - Đang tải video
 - `OCR_Processing` - Đang trích xuất text

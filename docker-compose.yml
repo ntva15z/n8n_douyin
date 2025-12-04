@@ -40,6 +40,12 @@ services:
     restart: unless-stopped
     expose:
       - "3000"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
     environment:
       - PORT=3000
       - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}

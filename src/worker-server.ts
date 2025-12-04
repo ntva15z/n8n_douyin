@@ -218,10 +218,10 @@ async function extractAndOCR(videoPath: string, framesDir: string): Promise<Arra
   const duration = parseFloat(durationStr.trim());
   console.log(`  Video duration: ${duration.toFixed(2)}s`);
 
-  // Extract frames every 1 second for better text detection
-  const fps = 1; // 1 frame per second
+  // Extract frames 2 per second, crop bottom 45% where subtitles appear
+  const fps = 2; // 2 frames per second
   await execAsync(
-    `ffmpeg -i "${videoPath}" -vf "fps=${fps}" -q:v 2 "${framesDir}/frame_%04d.jpg" -y`,
+    `ffmpeg -i "${videoPath}" -vf "fps=${fps},crop=iw:ih*0.45:0:ih*0.55" -q:v 2 "${framesDir}/frame_%04d.jpg" -y`,
     { maxBuffer: 100 * 1024 * 1024, timeout: 300000 }
   );
 
@@ -242,49 +242,74 @@ import os
 import sys
 import time
 import json
-
-print(f"[DEBUG] Python: {sys.version}", file=sys.stderr)
+import gc
+import re
 
 try:
     import easyocr
-    print(f"[DEBUG] EasyOCR imported", file=sys.stderr)
 except ImportError as e:
-    print(f"[ERROR] Failed to import easyocr: {e}", file=sys.stderr)
     print("[]")
     sys.exit(0)
 
 start_time = time.time()
 frames = ["${framesList}"]
-print(f"[DEBUG] Processing {len(frames)} frames sequentially...", file=sys.stderr)
+print(f"[DEBUG] Processing {len(frames)} subtitle regions...", file=sys.stderr)
+sys.stderr.flush()
 
-# Initialize reader once
-print(f"[DEBUG] Initializing EasyOCR reader...", file=sys.stderr)
+# Check first frame
+if frames:
+    from PIL import Image
+    img = Image.open(frames[0])
+    print(f"[DEBUG] Frame size: {img.size}", file=sys.stderr)
+
+# Initialize reader with Chinese
 reader = easyocr.Reader(['ch_sim'], gpu=False, verbose=False)
 print(f"[DEBUG] Reader ready in {time.time()-start_time:.1f}s", file=sys.stderr)
+sys.stderr.flush()
+
+# Chinese character pattern
+chinese_pattern = re.compile(r'[\\u4e00-\\u9fff]')
 
 results = []
 for i, frame_path in enumerate(frames):
     try:
+        # OCR - use default settings for reliability
         result = reader.readtext(frame_path)
-        texts = [d[1] for d in result if d[2] > 0.3]
-        results.append(texts)
         
+        # Debug first few frames
+        if i < 5:
+            print(f"[DEBUG] Frame {i+1} raw: {result}", file=sys.stderr)
+        
+        # Extract all text with confidence > 0.05 (very low threshold)
+        texts = []
+        for detection in result:
+            if len(detection) >= 2:
+                text = str(detection[1]).strip()
+                conf = float(detection[2]) if len(detection) > 2 else 0.5
+                # Very low threshold to catch more text
+                if conf > 0.05 and len(text) > 0:
+                    texts.append(text)
+        
+        results.append(texts)
         if texts:
             print(f"[DEBUG] Frame {i+1}: {texts}", file=sys.stderr)
-        elif i < 3:
-            print(f"[DEBUG] Frame {i+1}: (no text)", file=sys.stderr)
-            
     except Exception as e:
-        print(f"[ERROR] Frame {i+1}: {e}", file=sys.stderr)
+        print(f"[DEBUG] Frame {i+1} error: {e}", file=sys.stderr)
         results.append([])
+    
+    # Progress every 50 frames
+    if (i + 1) % 50 == 0:
+        print(f"[DEBUG] Progress: {i+1}/{len(frames)}", file=sys.stderr)
+        sys.stderr.flush()
+        gc.collect()
 
 frames_with_text = sum(1 for r in results if r)
 elapsed = time.time() - start_time
-print(f"[DEBUG] Done in {elapsed:.1f}s: {frames_with_text}/{len(results)} frames have text", file=sys.stderr)
+print(f"[DEBUG] Done in {elapsed:.1f}s: {frames_with_text}/{len(results)} frames with text", file=sys.stderr)
 sys.stderr.flush()
 
-# Output JSON to stdout
-print(json.dumps(results, ensure_ascii=False))
+output = json.dumps(results, ensure_ascii=False)
+print(output)
 sys.stdout.flush()
 `;
   fs.writeFileSync(ocrScriptPath, batchScript);
@@ -301,89 +326,171 @@ sys.stdout.flush()
     
     // Log stderr for debugging (contains progress info)
     if (stderr) {
-      const stderrLines = stderr.split('\n').slice(-10).join('\n');
-      console.log(`  OCR log (last 10 lines):\n${stderrLines}`);
+      const stderrLines = stderr.split('\n').slice(-15).join('\n');
+      console.log(`  stderr (last 15 lines):\n${stderrLines}`);
     }
 
     console.log(`  stdout length: ${stdout.length}`);
-    console.log(`  stdout preview: ${stdout.substring(0, 200)}`);
-
-    // Find JSON line in output - should be the last non-empty line
-    const lines = stdout.trim().split('\n');
-    const jsonLine = lines.reverse().find(line => line.trim().startsWith('['));
     
-    if (jsonLine) {
-      allResults = JSON.parse(jsonLine.trim());
-      console.log(`  Parsed ${allResults.length} frame results`);
+    if (stdout.length > 0) {
+      console.log(`  stdout first 300 chars: ${stdout.substring(0, 300)}`);
       
-      // Count frames with text
-      const framesWithText = allResults.filter(r => r && r.length > 0).length;
-      console.log(`  Frames with text: ${framesWithText}`);
+      // Find JSON - look for array pattern
+      const jsonMatch = stdout.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        allResults = JSON.parse(jsonMatch[0]);
+        console.log(`  Parsed ${allResults.length} frame results`);
+        
+        // Count frames with text
+        const framesWithText = allResults.filter(r => r && r.length > 0).length;
+        console.log(`  Frames with text: ${framesWithText}`);
+      } else {
+        console.log(`  No JSON array found in stdout`);
+      }
     } else {
-      console.log(`  No JSON output found in stdout`);
-      console.log(`  All stdout lines: ${lines.slice(0, 5).join(' | ')}`);
+      console.log(`  stdout is empty!`);
     }
   } catch (error: any) {
-    console.error(`  OCR error: ${error.message}`);
-    if (error.stdout) console.log(`  stdout: ${error.stdout.substring(0, 500)}`);
-    if (error.stderr) console.log(`  stderr: ${error.stderr.substring(0, 500)}`);
+    console.error(`  OCR error: ${error.message.substring(0, 200)}`);
+    // Even on error, try to parse stdout if available
+    if (error.stdout && error.stdout.length > 0) {
+      console.log(`  Trying to parse stdout from error...`);
+      const jsonMatch = error.stdout.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        try {
+          allResults = JSON.parse(jsonMatch[0]);
+          console.log(`  Recovered ${allResults.length} frame results from error output`);
+        } catch (e) {
+          console.log(`  Failed to parse JSON from error stdout`);
+        }
+      }
+    }
+    if (error.stderr) {
+      const stderrLines = error.stderr.split('\n').slice(-10).join('\n');
+      console.log(`  stderr: ${stderrLines}`);
+    }
   }
   
   try {
+    const frameInterval = 0.5; // 2 fps = 0.5s per frame
     
-    // First pass: extract text from each frame (1 frame = 1 second)
+    // First pass: extract text from each frame
     const frameTexts: Array<{time: number, text: string}> = [];
     
     for (let i = 0; i < allResults.length; i++) {
       const texts = allResults[i];
-      const chineseTexts = texts.filter(t => /[\u4e00-\u9fff]/.test(t));
-      const text = chineseTexts.join(' ').trim();
-
-      if (i < 5) {
-        console.log(`  [DEBUG] Frame ${i + 1} (${i}s): ${text || '(empty)'}`);
-      }
-
-      frameTexts.push({ time: i, text });
+      // Keep all text, join with space
+      const text = texts.join(' ').trim();
+      const frameTime = i * frameInterval;
+      frameTexts.push({ time: frameTime, text });
     }
 
-    // Second pass: merge consecutive frames with same text
+    // Second pass: merge only EXACT same text (less aggressive)
     const results: Array<{start: number, end: number, text: string}> = [];
-    let currentSegment: {start: number, end: number, text: string} | null = null;
+    let currentSegment: {start: number, end: number, text: string, texts: string[]} | null = null;
+
+    // Calculate similarity ratio between two strings
+    const stringSimilarity = (a: string, b: string): number => {
+      if (!a || !b) return 0;
+      if (a === b) return 1;
+      
+      const longer = a.length > b.length ? a : b;
+      const shorter = a.length > b.length ? b : a;
+      
+      if (longer.length === 0) return 1;
+      
+      // Count matching characters
+      let matches = 0;
+      for (const char of shorter) {
+        if (longer.includes(char)) matches++;
+      }
+      
+      return matches / longer.length;
+    };
+
+    const textSimilarity = (a: string, b: string): boolean => {
+      if (!a || !b) return false;
+      if (a === b) return true;
+      // Merge if similarity > 70%
+      return stringSimilarity(a, b) > 0.7;
+    };
 
     for (const frame of frameTexts) {
       if (!frame.text) {
-        // No text in this frame - close current segment if exists
+        // No text - close segment immediately (no gap tolerance)
         if (currentSegment) {
-          results.push(currentSegment);
+          // Pick longest text from collected texts
+          currentSegment.text = currentSegment.texts.reduce((a, b) => a.length >= b.length ? a : b);
+          results.push({ start: currentSegment.start, end: currentSegment.end, text: currentSegment.text });
           currentSegment = null;
         }
         continue;
       }
 
-      if (currentSegment && currentSegment.text === frame.text) {
-        // Same text - extend current segment
-        currentSegment.end = Math.min(frame.time + 1, duration);
+      if (currentSegment && textSimilarity(currentSegment.text, frame.text)) {
+        // Similar text - extend segment
+        currentSegment.end = frame.time + frameInterval;
+        currentSegment.texts.push(frame.text);
+        // Update text to longest version
+        if (frame.text.length > currentSegment.text.length) {
+          currentSegment.text = frame.text;
+        }
       } else {
         // Different text - close previous and start new
         if (currentSegment) {
-          results.push(currentSegment);
+          // Pick longest text
+          currentSegment.text = currentSegment.texts.reduce((a, b) => a.length >= b.length ? a : b);
+          results.push({ start: currentSegment.start, end: currentSegment.end, text: currentSegment.text });
         }
         currentSegment = {
           start: frame.time,
-          end: Math.min(frame.time + 1, duration),
-          text: frame.text
+          end: frame.time + frameInterval,
+          text: frame.text,
+          texts: [frame.text]
         };
-        console.log(`  Segment: ${frame.time}s - "${frame.text.substring(0, 40)}..."`);
       }
     }
 
     // Don't forget last segment
     if (currentSegment) {
-      results.push(currentSegment);
+      currentSegment.text = currentSegment.texts.reduce((a, b) => a.length >= b.length ? a : b);
+      results.push({ start: currentSegment.start, end: currentSegment.end, text: currentSegment.text });
     }
 
-    console.log(`  OCR found ${results.length} text segments (merged from ${frameTexts.filter(f => f.text).length} frames)`);
-    return results;
+    // Post-process: merge consecutive segments with similar text
+    const mergedResults: Array<{start: number, end: number, text: string}> = [];
+    
+    for (const segment of results) {
+      if (mergedResults.length === 0) {
+        mergedResults.push(segment);
+        continue;
+      }
+      
+      const last = mergedResults[mergedResults.length - 1];
+      const gap = segment.start - last.end;
+      const similarity = stringSimilarity(last.text, segment.text);
+      
+      // Merge if gap < 1s AND similarity > 60%
+      if (gap < 1 && similarity > 0.6) {
+        last.end = segment.end;
+        // Keep longer/better text
+        if (segment.text.length > last.text.length) {
+          last.text = segment.text;
+        }
+      } else {
+        mergedResults.push(segment);
+      }
+    }
+
+    // Filter: keep segments >= 0.2s
+    const filteredResults = mergedResults.filter(r => r.end - r.start >= 0.2);
+    
+    console.log(`  OCR found ${filteredResults.length} segments (merged from ${results.length}) from ${frameTexts.filter(f => f.text).length} frames`);
+    filteredResults.forEach((r, i) => {
+      console.log(`    ${i+1}. [${r.start.toFixed(1)}s-${r.end.toFixed(1)}s] ${r.text}`);
+    });
+    
+    return filteredResults;
     
   } catch (error: any) {
     const fullError = error.stderr || error.stdout || error.message;
@@ -420,8 +527,10 @@ async function translateToVietnamese(segments: Array<{start: number, end: number
     return generateSrt(segments);
   }
 
-  // Combine all texts for batch translation
+  // Format texts for translation with context
   const textsToTranslate = segments.map((s, i) => `${i + 1}. ${s.text}`).join('\n');
+
+  console.log(`  Translating ${segments.length} segments...`);
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -434,23 +543,39 @@ async function translateToVietnamese(segments: Array<{start: number, end: number
         model: 'gpt-4o-mini',
         messages: [{
           role: 'system',
-          content: 'You are a translator. Translate Chinese to Vietnamese. Keep the numbering format. Only output translations, no explanations.'
+          content: `Bạn là chuyên gia dịch thuật Trung-Việt. Dịch các phụ đề video từ tiếng Trung sang tiếng Việt.
+
+Quy tắc:
+- Giữ nguyên số thứ tự (1., 2., 3.,...)
+- Dịch tự nhiên, phù hợp ngữ cảnh video (có thể là nấu ăn, hướng dẫn, vlog...)
+- Giữ nguyên số liệu, đơn vị (2勺 = 2 thìa)
+- Nếu là thuật ngữ nấu ăn, dịch chính xác (老抽 = xì dầu đậm, 蚝油 = dầu hào)
+- Chỉ trả về bản dịch, không giải thích`
         }, {
           role: 'user',
-          content: `Translate these Chinese texts to Vietnamese:\n\n${textsToTranslate}`
+          content: `Dịch các phụ đề sau sang tiếng Việt:\n\n${textsToTranslate}`
         }],
-        temperature: 0.3,
-        max_tokens: 2000
+        temperature: 0.2,
+        max_tokens: 3000
       })
     });
 
     const data = await response.json() as any;
     const translatedText = data.choices?.[0]?.message?.content || '';
+    
+    console.log(`  Translation response: ${translatedText.substring(0, 200)}...`);
 
-    // Parse translated lines
-    const translatedLines = translatedText.split('\n').filter((l: string) => l.trim());
+    // Parse translated lines - handle various formats
+    const translatedLines = translatedText.split('\n')
+      .map((l: string) => l.trim())
+      .filter((l: string) => l && /^\d+\./.test(l));
+    
     const translatedSegments = segments.map((seg, i) => {
-      const line = translatedLines.find((l: string) => l.startsWith(`${i + 1}.`));
+      // Find line starting with this index
+      const line = translatedLines.find((l: string) => {
+        const match = l.match(/^(\d+)\./);
+        return match && parseInt(match[1]) === i + 1;
+      });
       const translated = line ? line.replace(/^\d+\.\s*/, '').trim() : seg.text;
       return { ...seg, text: translated };
     });

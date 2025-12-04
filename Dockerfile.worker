@@ -19,8 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install EasyOCR for text detection
-RUN pip install --no-cache-dir easyocr
+# Install EasyOCR and image processing
+RUN pip install --no-cache-dir easyocr pillow numpy
 
 # Pre-download EasyOCR models to avoid runtime download
 RUN python3 -c "import easyocr; easyocr.Reader(['ch_sim'], gpu=False, verbose=True)"

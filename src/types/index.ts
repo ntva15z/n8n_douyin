@@ -102,7 +102,15 @@ export interface EnvConfig {
   GOOGLE_DRIVE_FOLDER_ID: string;
   GOOGLE_CREDENTIALS: string;
   OPENAI_API_KEY: string;
+  GEMINI_API_KEY: string;
   ALERT_WEBHOOK_URL?: string;
   TEMP_VIDEO_PATH: string;
   OUTPUT_VIDEO_PATH: string;
+}
+
+// Gemini Vision Response
+export interface GeminiSubtitleResult {
+  segments: TextSegment[];
+  language: string;
+  rawResponse?: string;
 }

@@ -218,10 +218,10 @@ async function extractAndOCR(videoPath: string, framesDir: string): Promise<Arra
   const duration = parseFloat(durationStr.trim());
   console.log(`  Video duration: ${duration.toFixed(2)}s`);
 
-  // Extract frames 2 per second, crop bottom 45% where subtitles appear
-  const fps = 2; // 2 frames per second
+  // Extract frames 1 per second, full frame scaled down for memory efficiency
+  const fps = 1; // 1 frame per second - less frames, full coverage
   await execAsync(
-    `ffmpeg -i "${videoPath}" -vf "fps=${fps},crop=iw:ih*0.45:0:ih*0.55" -q:v 2 "${framesDir}/frame_%04d.jpg" -y`,
+    `ffmpeg -i "${videoPath}" -vf "fps=${fps},scale=720:-1" -q:v 3 "${framesDir}/frame_%04d.jpg" -y`,
     { maxBuffer: 100 * 1024 * 1024, timeout: 300000 }
   );
 
@@ -236,6 +236,7 @@ async function extractAndOCR(videoPath: string, framesDir: string): Promise<Arra
   const ocrScriptPath = path.join(framesDir, 'batch_ocr.py');
   const framesList = frames.map(f => path.join(framesDir, f)).join('","');
   
+  const resultsFile = path.join(framesDir, 'ocr_results.json');
   const batchScript = `import warnings
 warnings.filterwarnings('ignore')
 import os
@@ -243,7 +244,6 @@ import sys
 import time
 import json
 import gc
-import re
 
 try:
     import easyocr
@@ -253,63 +253,64 @@ except ImportError as e:
 
 start_time = time.time()
 frames = ["${framesList}"]
-print(f"[DEBUG] Processing {len(frames)} subtitle regions...", file=sys.stderr)
+results_file = "${resultsFile}"
+print(f"[DEBUG] Processing {len(frames)} frames...", file=sys.stderr)
 sys.stderr.flush()
-
-# Check first frame
-if frames:
-    from PIL import Image
-    img = Image.open(frames[0])
-    print(f"[DEBUG] Frame size: {img.size}", file=sys.stderr)
 
 # Initialize reader with Chinese
 reader = easyocr.Reader(['ch_sim'], gpu=False, verbose=False)
 print(f"[DEBUG] Reader ready in {time.time()-start_time:.1f}s", file=sys.stderr)
 sys.stderr.flush()
 
-# Chinese character pattern
-chinese_pattern = re.compile(r'[\\u4e00-\\u9fff]')
-
 results = []
+debug_log = []
 for i, frame_path in enumerate(frames):
     try:
-        # OCR - use default settings for reliability
         result = reader.readtext(frame_path)
         
-        # Debug first few frames
-        if i < 5:
-            print(f"[DEBUG] Frame {i+1} raw: {result}", file=sys.stderr)
+        # Save debug for first 10 frames
+        if i < 10:
+            debug_log.append(f"Frame {i+1}: {result}")
         
-        # Extract all text with confidence > 0.05 (very low threshold)
         texts = []
         for detection in result:
             if len(detection) >= 2:
                 text = str(detection[1]).strip()
-                conf = float(detection[2]) if len(detection) > 2 else 0.5
-                # Very low threshold to catch more text
-                if conf > 0.05 and len(text) > 0:
+                # No confidence filter - keep all detected text
+                if len(text) > 0:
                     texts.append(text)
         
         results.append(texts)
         if texts:
             print(f"[DEBUG] Frame {i+1}: {texts}", file=sys.stderr)
     except Exception as e:
-        print(f"[DEBUG] Frame {i+1} error: {e}", file=sys.stderr)
+        debug_log.append(f"Frame {i+1} error: {e}")
         results.append([])
+
+# Print debug for first frames at the end (so it's visible)
+print(f"[DEBUG] === First 10 frames raw detections ===", file=sys.stderr)
+for log in debug_log:
+    print(f"[DEBUG] {log}", file=sys.stderr)
     
-    # Progress every 50 frames
-    if (i + 1) % 50 == 0:
+    # Save progress every 20 frames
+    if (i + 1) % 20 == 0:
         print(f"[DEBUG] Progress: {i+1}/{len(frames)}", file=sys.stderr)
         sys.stderr.flush()
+        # Save intermediate results
+        with open(results_file, 'w') as f:
+            json.dump(results, f, ensure_ascii=False)
         gc.collect()
+
+# Final save
+with open(results_file, 'w') as f:
+    json.dump(results, f, ensure_ascii=False)
 
 frames_with_text = sum(1 for r in results if r)
 elapsed = time.time() - start_time
-print(f"[DEBUG] Done in {elapsed:.1f}s: {frames_with_text}/{len(results)} frames with text", file=sys.stderr)
+print(f"[DEBUG] Done in {elapsed:.1f}s: {frames_with_text}/{len(results)} frames", file=sys.stderr)
 sys.stderr.flush()
 
-output = json.dumps(results, ensure_ascii=False)
-print(output)
+print(json.dumps(results, ensure_ascii=False))
 sys.stdout.flush()
 `;
   fs.writeFileSync(ocrScriptPath, batchScript);
@@ -352,19 +353,32 @@ sys.stdout.flush()
     }
   } catch (error: any) {
     console.error(`  OCR error: ${error.message.substring(0, 200)}`);
-    // Even on error, try to parse stdout if available
-    if (error.stdout && error.stdout.length > 0) {
-      console.log(`  Trying to parse stdout from error...`);
+    
+    // Try to read from saved results file
+    if (fs.existsSync(resultsFile)) {
+      console.log(`  Reading from saved results file...`);
+      try {
+        const savedResults = fs.readFileSync(resultsFile, 'utf-8');
+        allResults = JSON.parse(savedResults);
+        console.log(`  Recovered ${allResults.length} frame results from file`);
+        const framesWithText = allResults.filter(r => r && r.length > 0).length;
+        console.log(`  Frames with text: ${framesWithText}`);
+      } catch (e) {
+        console.log(`  Failed to parse saved results`);
+      }
+    }
+    
+    // Also try stdout if available
+    if (allResults.length === 0 && error.stdout && error.stdout.length > 0) {
       const jsonMatch = error.stdout.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         try {
           allResults = JSON.parse(jsonMatch[0]);
-          console.log(`  Recovered ${allResults.length} frame results from error output`);
-        } catch (e) {
-          console.log(`  Failed to parse JSON from error stdout`);
-        }
+          console.log(`  Recovered ${allResults.length} from stdout`);
+        } catch (e) {}
       }
     }
+    
     if (error.stderr) {
       const stderrLines = error.stderr.split('\n').slice(-10).join('\n');
       console.log(`  stderr: ${stderrLines}`);
@@ -372,7 +386,7 @@ sys.stdout.flush()
   }
   
   try {
-    const frameInterval = 0.5; // 2 fps = 0.5s per frame
+    const frameInterval = 1; // 1 fps = 1s per frame
     
     // First pass: extract text from each frame
     const frameTexts: Array<{time: number, text: string}> = [];
@@ -482,8 +496,17 @@ sys.stdout.flush()
       }
     }
 
-    // Filter: keep segments >= 0.2s
-    const filteredResults = mergedResults.filter(r => r.end - r.start >= 0.2);
+    // Filter: keep valid segments
+    const filteredResults = mergedResults.filter(r => {
+      // Must be >= 0.2s
+      if (r.end - r.start < 0.2) return false;
+      // Must have at least 2 Chinese characters
+      const chineseChars = (r.text.match(/[\u4e00-\u9fff]/g) || []).length;
+      if (chineseChars < 2) return false;
+      // Filter out noise (only special chars or single char)
+      if (r.text.length < 2) return false;
+      return true;
+    });
     
     console.log(`  OCR found ${filteredResults.length} segments (merged from ${results.length}) from ${frameTexts.filter(f => f.text).length} frames`);
     filteredResults.forEach((r, i) => {
